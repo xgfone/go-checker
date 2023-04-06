@@ -59,11 +59,11 @@ type Checker struct {
 	ckcb func(string, bool)
 	conf atomic.Value // Config
 	cond atomic.Value // Condition
-	fail uint64
-	ok   uint32
 
 	ctxlock sync.Mutex
 	cancelf context.CancelFunc
+	fail    uint64
+	ok      uint32
 
 	jitter atomic.Value // func(interval time.Duration) time.Duration
 }
@@ -262,19 +262,28 @@ func (c *Checker) checkCondtion(ctx context.Context, config Config) (ok bool) {
 func (c *Checker) updateStatus(success bool, failure uint64) {
 	var changed bool
 	if success {
+		c.ctxlock.Lock()
 		if c.fail > 0 {
 			c.fail = 0
 		}
+		c.ctxlock.Unlock()
 		changed = atomic.CompareAndSwapUint32(&c.ok, 0, 1)
 	} else {
 		switch {
 		case failure == 0:
+			c.ctxlock.Lock()
 			if c.fail > 0 {
 				c.fail = 0
 			}
+			c.ctxlock.Unlock()
 			changed = atomic.CompareAndSwapUint32(&c.ok, 1, 0)
 		case failure > 0:
-			if c.fail++; c.fail > failure {
+			c.ctxlock.Lock()
+			c.fail++
+			fail := c.fail
+			c.ctxlock.Unlock()
+
+			if fail > failure {
 				changed = atomic.CompareAndSwapUint32(&c.ok, 1, 0)
 			}
 		}
