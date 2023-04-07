@@ -31,6 +31,9 @@ var (
 
 	// DefaultConfig is the default checker config.
 	DefaultConfig = Config{Failure: 1, Timeout: time.Second, Interval: DefaultInterval}
+
+	// DefaultCondition is the default condition.
+	DefaultCondition Condition = AlwaysTrue()
 )
 
 // Config is used to configure the checker.
@@ -53,6 +56,16 @@ type ConditionFunc func(context.Context) bool
 // Check implements the interface Condition.
 func (f ConditionFunc) Check(c context.Context) bool { return f(c) }
 
+// AlwaysTrue returns a condition that returns true always.
+func AlwaysTrue() Condition {
+	return ConditionFunc(func(context.Context) bool { return true })
+}
+
+// AlwaysFalse returns a condition that returns false always.
+func AlwaysFalse() Condition {
+	return ConditionFunc(func(context.Context) bool { return false })
+}
+
 // Checker is used to check whether a condition is ok.
 type Checker struct {
 	ckid string
@@ -70,14 +83,12 @@ type Checker struct {
 
 // NewChecker returns a new condition checker with DefaultConfig.
 //
-// id and cond is mandatory, and callback is optional.
-// When the ok status of the checker has changed, callback will be called if it is set.
+// id is mandatory, and condition and callback are optional.
+// If condition is equal to nil, use DefaultCondition instead.
+// When the ok status has changed, callback will be called if it is set.
 func NewChecker(id string, condition Condition, callback func(id string, ok bool)) *Checker {
 	if id == "" {
 		panic("Checker: the checker id must not be empty")
-	}
-	if condition == nil {
-		panic("Checker: the checker condition must not be nil")
 	}
 	c := &Checker{ckid: id, ckcb: callback}
 	c.SetCondition(condition)
@@ -93,9 +104,13 @@ func (c *Checker) ID() string { return c.ckid }
 func (c *Checker) Condition() Condition { return c.cond.Load().(Condition) }
 
 // SetCondition resets the condition.
+//
+// If cond is nil, use DefaultCondition.
 func (c *Checker) SetCondition(cond Condition) {
 	if cond == nil {
-		panic("the checker condition must not be nil")
+		if cond = DefaultCondition; cond == nil {
+			panic("Checker: the condition must not be nil")
+		}
 	}
 	c.cond.Store(cond)
 }
