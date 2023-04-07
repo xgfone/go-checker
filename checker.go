@@ -39,7 +39,7 @@ var (
 // Config is used to configure the checker.
 type Config struct {
 	// More than this, the checker will change the ok status from true to false.
-	Failure  uint64        // The number that the condition fails.
+	Failure  int           // The number that the condition fails.
 	Timeout  time.Duration // The timeout duration to check the condition.
 	Interval time.Duration // The interval duration between two checkers.
 	Delay    time.Duration // The delay duration for the first start.
@@ -72,11 +72,11 @@ type Checker struct {
 	ckcb func(string, bool)
 	conf atomic.Value // Config
 	cond atomic.Value // Condition
+	fail uint32
+	ok   uint32
 
 	ctxlock sync.Mutex
 	cancelf context.CancelFunc
-	fail    uint64
-	ok      uint32
 
 	jitter atomic.Value // func(interval time.Duration) time.Duration
 }
@@ -256,7 +256,7 @@ func (c *Checker) beforeStart(ctx context.Context) (ok bool) {
 
 func (c *Checker) checkConfig(ctx context.Context, config Config) {
 	defer c.wrapPanic()
-	c.updateStatus(c.checkCondtion(ctx, config), config.Failure)
+	c.updateStatus(c.checkCondtion(ctx, config), uint32(config.Failure))
 }
 
 func (c *Checker) wrapPanic() {
@@ -274,31 +274,22 @@ func (c *Checker) checkCondtion(ctx context.Context, config Config) (ok bool) {
 	return c.Condition().Check(ctx)
 }
 
-func (c *Checker) updateStatus(success bool, failure uint64) {
+func (c *Checker) updateStatus(success bool, failure uint32) {
 	var changed bool
 	if success {
-		c.ctxlock.Lock()
-		if c.fail > 0 {
-			c.fail = 0
-		}
-		c.ctxlock.Unlock()
 		changed = atomic.CompareAndSwapUint32(&c.ok, 0, 1)
+		if atomic.LoadUint32(&c.fail) != 0 {
+			atomic.StoreUint32(&c.fail, 0)
+		}
 	} else {
 		switch {
 		case failure == 0:
-			c.ctxlock.Lock()
-			if c.fail > 0 {
-				c.fail = 0
-			}
-			c.ctxlock.Unlock()
 			changed = atomic.CompareAndSwapUint32(&c.ok, 1, 0)
+			if atomic.LoadUint32(&c.fail) != 0 {
+				atomic.StoreUint32(&c.fail, 0)
+			}
 		case failure > 0:
-			c.ctxlock.Lock()
-			c.fail++
-			fail := c.fail
-			c.ctxlock.Unlock()
-
-			if fail > failure {
+			if atomic.AddUint32(&c.fail, 1) > failure {
 				changed = atomic.CompareAndSwapUint32(&c.ok, 1, 0)
 			}
 		}
