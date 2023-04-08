@@ -157,6 +157,9 @@ func (c *Checker) Stop() {
 	c.ctxlock.Unlock()
 }
 
+// Run is equal to c.Start(context.Background()).
+func (c *Checker) Run() { c.Start(context.Background()) }
+
 // Started reports whether the checker has already been started.
 func (c *Checker) Started() (yes bool) {
 	c.ctxlock.Lock()
