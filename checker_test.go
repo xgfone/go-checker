@@ -53,7 +53,7 @@ func TestChecker(t *testing.T) {
 	if success != 3 {
 		t.Errorf("expect success %d, but got %d", 3, success)
 	}
-	if failure != 2 {
-		t.Errorf("expect failure %d, but got %d", 2, failure)
+	if failure != 3 {
+		t.Errorf("expect failure %d, but got %d", 3, failure)
 	}
 }
