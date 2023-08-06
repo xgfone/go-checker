@@ -181,6 +181,8 @@ func (c *Checker) Start(ctx context.Context) {
 
 	ctx, c.cancelf = context.WithCancel(ctx)
 	c.ctxlock.Unlock()
+
+	defer c.updateStatus(false, 0)
 	defer c.Stop()
 
 	if c.beforeStart(ctx) {
